@@ -14,55 +14,60 @@ You must have at least 3 tools. The three required tools are listed — add any 
 
 ### Tool 1: search_listings
 
-**What it does:**
-<!-- Describe what this tool does in 1–2 sentences -->
+**What it does:
+It searches listings for the items that the user asked for. It returns the listings for the user.**
 
-**Input parameters:**
-<!-- List each parameter, its type, and what it represents -->
-- `description` (str): ...
-- `size` (str): ...
-- `max_price` (float): ...
+**Input parameters:
+- `description` (str): describes what the user is looking for
+- `size` (str): size of item
+- `max_price` (float): price of item
+**
 
-**What it returns:**
-<!-- Describe the return value — what fields does a result contain? -->
+**What it returns:
+A list of matching listing dicts, sorted by relevance (best match first).
+Returns an empty list if nothing matches — does NOT raise an exception.**
 
-**What happens if it fails or returns nothing:**
-<!-- What should the agent do if no listings match? -->
+**What happens if it fails or returns nothing:
+No results match the query**
 
 ---
 
 ### Tool 2: suggest_outfit
 
-**What it does:**
-<!-- Describe what this tool does in 1–2 sentences -->
+**What it does:
+Given a thrifted item and the user's wardrobe, suggest 1–2 complete outfits.**
 
-**Input parameters:**
+**Input parameters:
 <!-- List each parameter, its type, and what it represents -->
-- `new_item` (dict): ...
-- `wardrobe` (dict): ...
+- `new_item` (dict): the item the user is considering buying.
+- `wardrobe` (dict): A wardrobe dict with an 'items' key containing a list of
+                  wardrobe item dicts. May be empty.**
 
-**What it returns:**
-<!-- Describe the return value -->
+**What it returns:
+A string with outfit suggestions.
+If the wardrobe is empty, offer general styling advice for the item
+rather than raising an exception or returning an empty string.**
 
-**What happens if it fails or returns nothing:**
-<!-- What should the agent do if the wardrobe is empty or no outfit can be suggested? -->
+**What happens if it fails or returns nothing:
+Wardrobe is empty**
 
 ---
 
 ### Tool 3: create_fit_card
 
-**What it does:**
-<!-- Describe what this tool does in 1–2 sentences -->
+**What it does:
+Generate a short, shareable outfit caption for the thrifted find.**
 
-**Input parameters:**
+**Input parameters:
 <!-- List each parameter, its type, and what it represents -->
-- `outfit` (...): ...
+- `outfit` (...): The outfit suggestion string from suggest_outfit()**
 
-**What it returns:**
-<!-- Describe the return value -->
+**What it returns:
+If the outfit is empty or missing, return a descriptive error message
+string — do NOT raise an exception.**
 
-**What happens if it fails or returns nothing:**
-<!-- What should the agent do if the outfit data is incomplete? -->
+**What happens if it fails or returns nothing:
+ Outfit input is missing or incomplete**
 
 ---
 
@@ -74,15 +79,15 @@ You must have at least 3 tools. The three required tools are listed — add any 
 
 ## Planning Loop
 
-**How does your agent decide which tool to call next?**
-<!-- Describe the logic your planning loop uses. What does it look at? What conditions change its behavior? How does it know when it's done? -->
+**How does your agent decide which tool to call next?
+It checks the logs of each item and moves on to the next step.**
 
 ---
 
 ## State Management
 
-**How does information from one tool get passed to the next?**
-<!-- Describe how your agent stores and accesses state within a session. What data is tracked? How is it passed between tool calls? -->
+**How does information from one tool get passed to the next?
+With state tracking, it logs each item as checked before moving on to the next and maintains a list of results. Information has to flow to the next tool before the user reenters information.**
 
 ---
 
@@ -92,41 +97,33 @@ For each tool, describe the specific failure mode you're handling and what the a
 
 | Tool | Failure mode | Agent response |
 |------|-------------|----------------|
-| search_listings | No results match the query | |
-| suggest_outfit | Wardrobe is empty | |
-| create_fit_card | Outfit input is missing or incomplete | |
+| search_listings | No results match the query | Returns an empty list if nothing matches|
+| suggest_outfit | Wardrobe is empty | if wardrobe is empty, general styling advice for the item|
+| create_fit_card | Outfit input is missing or incomplete | return error message|
 
 ---
 
 ## Architecture
 
-<!-- Draw a diagram of your agent showing how the components connect:
-     User input → Planning Loop → Tools (search_listings, suggest_outfit, create_fit_card)
-                                                                          ↕
-                                                                   State / Session
-     Show what triggers each tool, how state flows between them, and where error paths branch off.
-     ASCII art, a Mermaid diagram (https://mermaid.js.org/syntax/flowchart.html), or an embedded
-     sketch are all fine. You'll share this diagram with an AI tool when asking it to implement
-     the planning loop and each individual tool. -->
+<img width="3094" height="7367" alt="image" src="https://github.com/user-attachments/assets/a33639b8-c81e-44ae-b60b-b334f3a33974" />
+
 
 ---
 
 ## AI Tool Plan
 
-<!-- For each part of the implementation below, describe:
-     - Which AI tool you plan to use (Claude, Copilot, ChatGPT, etc.)
-     - What you'll give it as input (which sections of this planning.md, your agent diagram)
-     - What you expect it to produce
-     - How you'll verify the output matches your spec before moving on
+I'll give Claude my Tool 1 spec (inputs, return value, failure mode) and ask it to implement
+search_listings() using load_listings() from the data loader — then test it against 3 queries
 
-     "I'll use AI to help me code" is not a plan.
-     "I'll give Claude my Tool 1 spec (inputs, return value, failure mode) and ask it to implement
-     search_listings() using load_listings() from the data loader — then test it against 3 queries
-     before trusting it" is a plan. -->
 
-**Milestone 3 — Individual tool implementations:**
+**Milestone 3 — Individual tool implementations: Use search_listings to look for what the user is looking for and return the listing. The parameters involved are the description, size, and price. 
+suggest_outfit returns the complete outfits with parameters such as new item and wardrobe. create_fit_card shows the outfit the user is looking for and returns a message using the parameter of outfit.
+**
 
-**Milestone 4 — Planning loop and state management:**
+
+**Milestone 4 — Planning loop and state management: After search_listings runs, check if results are empty. If yes, set an error message in the session and return early. If no, set selected_item = results[0] and proceed to suggest_outfit.
+After suggest_outfit runs, it checks for the items the person is looking for and suggests different options. If no, the wardrobe empty function will run and proceed to create_fit_card. After create_fit_card runs, it returns a message that shows the result of the query with the result from the suggest_outfit tool; if not, it will return incomplete or missing outfit.
+**
 
 ---
 
@@ -134,16 +131,16 @@ For each tool, describe the specific failure mode you're handling and what the a
 
 Write out what a full user interaction looks like from start to finish — tool call by tool call. Use a specific example query.
 
-**Example user query:** "I'm looking for a vintage graphic tee under $30. I mostly wear baggy jeans and chunky sneakers. What's out there and how would I style it?"
+**Example user query: "I'm looking for a vintage graphic tee under $30. I mostly wear baggy jeans and chunky sneakers. What's out there and how would I style it?"**
 
-**Step 1:**
-The agent looks for clothes stores using an ID. It uses a tool called search_listings to find vintage stores.
+**Step 1:
+The agent looks for clothes stores using an ID. It uses a tool called search_listings to find vintage stores.**
 
-**Step 2:**
-It returned the vintage clothes stores. The next tool call is suggest_outfit to give vintage clothes options.
+**Step 2:
+It returned the vintage clothes stores. The next tool call is suggest_outfit to give vintage clothes options.**
 
-**Step 3:**
-It would return the vintage clothes that are available. The next tool call is create_fit_card, which shows whether they are available.
+**Step 3:
+It would return the vintage clothes that are available. The next tool call is create_fit_card, which shows whether they are available.**
 
-**Final output to user:**
-Shows whether it is available or not.
+**Final output to user:
+Shows whether it is available or not.**
