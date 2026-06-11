@@ -137,13 +137,13 @@ Write out what a full user interaction looks like from start to finish — tool 
 **Example user query:** "I'm looking for a vintage graphic tee under $30. I mostly wear baggy jeans and chunky sneakers. What's out there and how would I style it?"
 
 **Step 1:**
-<!-- What does the agent do first? Which tool is called? With what input? -->
+The agent looks for clothes stores using an ID. It uses a tool called search_listings to find vintage stores.
 
 **Step 2:**
-<!-- What happens next? What was returned from step 1? What tool is called now? -->
+It returned the vintage clothes stores. The next tool call is suggest_outfit to give vintage clothes options.
 
 **Step 3:**
-<!-- Continue until the full interaction is complete -->
+It would return the vintage clothes that are available. The next tool call is create_fit_card, which shows whether they are available.
 
 **Final output to user:**
-<!-- What does the user actually see at the end? -->
+Shows whether it is available or not.
