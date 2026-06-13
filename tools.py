@@ -69,7 +69,44 @@ def search_listings(
 
     Before writing code, fill in the Tool 1 section of planning.md.
     """
-    # Replace this with your implementation
+   try:
+        listings = load_listings()
+    except Exception:
+     return []
+    
+    candidates = []
+    for listing in listings:
+        # Price filter
+        if max_price is not None:
+            try:
+                if float(listing.get("price", 0)) > max_price:
+                    continue
+            except (TypeError, ValueError):
+                continue
+ 
+        # Size filter — substring match so "M" hits "S/M", "M/L", etc.
+        if size is not None:
+            listing_size = str(listing.get("size", "")).upper()
+            if size.upper() not in listing_size:
+                continue
+ 
+        candidates.append(listing)
+ 
+    if not candidates:
+        return []
+    
+    return candidates
+
+ # 3. Score by keyword overlap
+    keywords = _tokenize(description)
+    if not keywords:
+        return candidates  # nothing to score on; return all filtered results
+ 
+    scored = [(s, l) for l in candidates if (s := _score_listing(l, keywords)) > 0]
+ 
+    # 4 & 5. Zero-score listings already dropped; sort highest first
+    scored.sort(key=lambda pair: pair[0], reverse=True)
+    return [listing for _, listing in scored]
     return []
 
 
@@ -100,7 +137,108 @@ def suggest_outfit(new_item: dict, wardrobe: dict) -> str:
 
     Before writing code, fill in the Tool 2 section of planning.md.
     """
-    # Replace this with your implementation
+    item_name   = new_item.get("title", "this item")
+    item_tags   = ", ".join(new_item.get("style_tags", [])) or "no tags"
+    item_colors = ", ".join(new_item.get("colors", [])) or "unknown"
+    item_cat    = new_item.get("category", "clothing")
+ 
+    # 1. Check whether the wardrobe is empty
+    wardrobe_items = wardrobe.get("items", [])
+ 
+    # 2. Empty wardrobe — ask for general styling advice
+    if not wardrobe_items:
+        prompt = (
+            f"A user is considering buying: '{item_name}' "
+            f"(category: {item_cat}, colors: {item_colors}, style: {item_tags}).\n\n"
+            "Their wardrobe is empty, so you can't reference specific pieces they own. "
+            "Give 1–2 outfit ideas that pair well with this item — suggest the types "
+            "of bottoms, tops, shoes, or accessories that would complete the look. "
+            "Be specific about silhouettes, colors, and vibes. Keep it to 3–5 sentences."
+        )
+        return _llm(prompt)
+ 
+    # 3. Non-empty wardrobe — format pieces and ask for specific pairings
+    wardrobe_lines = "\n".join(
+        f"- {item.get('title', 'Unknown')} "
+        f"(colors: {', '.join(item.get('colors', []))}, "
+        f"style: {', '.join(item.get('style_tags', []))})"
+        for item in wardrobe_items
+    )
+ 
+    prompt = (
+        f"A user is considering buying: '{item_name}' "
+        f"(category: {item_cat}, colors: {item_colors}, style: {item_tags}).\n\n"
+        f"Their current wardrobe includes:\n{wardrobe_lines}\n\n"
+        "Suggest 1–2 complete outfits that pair the new item with pieces from "
+        "their wardrobe. Name the specific wardrobe pieces you're using in each "
+        "outfit and explain briefly why they work together (color, silhouette, vibe). "
+        "Keep it to 4–6 sentences total."
+    )
+ 
+    # 4. Return LLM response
+    return _llm(prompt)
+    client = _get_groq_client()
+    # Describe the new item for the prompt regardless of wardrobe state.
+    item_summary = (
+        f"Title: {new_item.get('title', 'Unknown')}\n"
+        f"Category: {new_item.get('category', 'unknown')}\n"
+        f"Colors: {', '.join(new_item.get('colors', [])) or 'unknown'}\n"
+        f"Style tags: {', '.join(new_item.get('style_tags', [])) or 'none'}\n"
+        f"Condition: {new_item.get('condition', 'unknown')}\n"
+        f"Price: ${new_item.get('price', '?')}"
+    )
+ 
+    # 1. Check whether wardrobe['items'] is empty.
+    # .get() with a default handles both a missing key and an explicit empty list
+    # without raising a KeyError.
+    wardrobe_items = wardrobe.get("items", [])
+ 
+    if not wardrobe_items:
+        # 2. Empty wardrobe: ask for general styling ideas without referencing
+        # any pieces the user owns, since there are none.
+        prompt = (
+            "You are a knowledgeable thrift-fashion stylist.\n\n"
+            "A user is considering buying this secondhand item:\n"
+            f"{item_summary}\n\n"
+            "Their wardrobe is empty, so do not reference any pieces they own. "
+            "Suggest 1-2 outfit ideas that would pair well with this item. "
+            "For each outfit, name the types of pieces that would complete the look "
+            "(for example: 'wide-leg trousers', 'chunky platform boots'), describe the "
+            "overall vibe, and explain briefly why the combination works. "
+            "Keep the response to 4-6 sentences."
+        )
+    else:
+        # 3. Non-empty wardrobe: format each piece and ask the LLM to build
+        # specific outfit combinations using items the user already owns.
+        wardrobe_lines = "\n".join(
+            "- {title} (category: {cat}, colors: {colors}, style: {style})".format(
+                title=item.get("title", "Unknown"),
+                cat=item.get("category", "?"),
+                colors=", ".join(item.get("colors", [])) or "?",
+                style=", ".join(item.get("style_tags", [])) or "?",
+            )
+            for item in wardrobe_items
+        )
+        prompt = (
+            "You are a knowledgeable thrift-fashion stylist.\n\n"
+            "A user is considering buying this secondhand item:\n"
+            f"{item_summary}\n\n"
+            "Their current wardrobe contains:\n"
+            f"{wardrobe_lines}\n\n"
+            "Suggest 1-2 complete outfits that pair the new item with pieces already "
+            "in their wardrobe. For each outfit, name the exact wardrobe pieces you are "
+            "using, describe the overall vibe, and give a brief reason why the combination "
+            "works (color, silhouette, or style). Keep the response to 4-6 sentences."
+        )
+ 
+    # 4. Call the LLM and return its response as a plain string.
+    response = client.chat.completions.create(
+        model="llama-3.3-70b-versatile",
+        messages=[{"role": "user", "content": prompt}],
+        temperature=0.7,
+    )
+    return response.choices[0].message.content.strip()
+ 
     return ""
 
 
@@ -133,5 +271,50 @@ def create_fit_card(outfit: str, new_item: dict) -> str:
 
     Before writing code, fill in the Tool 3 section of planning.md.
     """
-    # Replace this with your implementation
+       # 1. Guard against empty/whitespace outfit
+    if not outfit or not outfit.strip():
+        return (
+            "Could not generate a fit card — outfit data was missing or incomplete. "
+            "Try running suggest_outfit first and pass its result here."
+        )
+ 
+    item_name     = new_item.get("title", "this find")
+    item_price    = new_item.get("price", "unknown price")
+    item_platform = new_item.get("platform", "a thrift platform")
+ 
+  # Return an informative message rather than calling the LLM with bad input.
+    if not outfit or not outfit.strip():
+        return (
+            "Error: no outfit description was provided. "
+            "Run suggest_outfit() first and pass its result to create_fit_card()."
+        )
+ 
+    client = _get_groq_client()
+
+    # 2. Build prompt with item details, outfit context, and caption guidelines
+    item_name = new_item.get("title", "this find")
+    item_price = new_item.get("price", "?")
+    item_platform = new_item.get("platform", "a resale app")
+
+    prompt = (
+        "You are writing a casual, authentic OOTD caption for Instagram or TikTok.\n\n"
+        f"The outfit: {outfit}\n\n"
+        f"The thrifted item: {item_name}, found for ${item_price} on {item_platform}.\n\n"
+        "Write a 2-4 sentence caption that:\n"
+        "- Sounds like a real person posting, not a brand or product listing\n"
+        "- Mentions the item name, price, and platform once each, woven in naturally\n"
+        "- Names the specific vibe of the outfit (e.g. 'clean 90s streetwear', "
+        "'soft grunge', 'coastal grandma meets Y2K')\n"
+        "- Avoids filler phrases like 'slaying', 'obsessed', or 'this look'\n"
+        "Return only the caption text. No hashtags. No preamble."
+    )
+ 
+   # 3. Call the LLM at high temperature so repeated calls produce varied captions.
+    response = client.chat.completions.create(
+        model="llama-3.3-70b-versatile",
+        messages=[{"role": "user", "content": prompt}],
+        temperature=1.2,
+    )
+    return response.choices[0].message.content.strip()
     return ""
+  
