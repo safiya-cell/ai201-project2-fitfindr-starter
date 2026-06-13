@@ -92,6 +92,57 @@ def run_agent(query: str, wardrobe: dict) -> dict:
     Before writing code, complete the Planning Loop and State Management sections
     of planning.md — your implementation should match what you described there.
     """
+
+        # Step 1: Initialize session
+    session = _new_session(query, wardrobe)
+ 
+    # Step 2: Parse the query into structured parameters
+    session["parsed"] = _parse_query(query)
+    description = session["parsed"]["description"]
+    size        = session["parsed"]["size"]
+    max_price   = session["parsed"]["max_price"]
+ 
+    # Step 3: Search for listings; stop early if nothing matches
+    results = search_listings(
+        description=description,
+        size=size,
+        max_price=max_price,
+    )
+    session["search_results"] = results
+ 
+    if not results:
+        # Tell the user which filters were active so they know what to relax
+        filters = []
+        if max_price is not None:
+            filters.append(f"max price ${max_price:.0f}")
+        if size is not None:
+            filters.append(f"size {size}")
+        filter_str = " and ".join(filters)
+        hint = f" (filters applied: {filter_str})" if filter_str else ""
+        session["error"] = (
+            f"No listings found for '{description}'{hint}. "
+            "Try a broader description, a higher price limit, or remove the size filter."
+        )
+        return session  # early exit — do not call the LLM tools with empty input
+ 
+    # Step 4: Select the top-ranked result as the item to style
+    session["selected_item"] = results[0]
+ 
+    # Step 5: Get outfit suggestions for the selected item
+    session["outfit_suggestion"] = suggest_outfit(
+        new_item=session["selected_item"],
+        wardrobe=session["wardrobe"],
+    )
+ 
+    # Step 6: Turn the outfit suggestion into a shareable fit card caption
+    session["fit_card"] = create_fit_card(
+        outfit=session["outfit_suggestion"],
+        new_item=session["selected_item"],
+    )
+ 
+    # Step 7: Return the completed session
+    return session
+
     # TODO: implement the planning loop
     session = _new_session(query, wardrobe)
     session["error"] = "Planning loop not yet implemented."
